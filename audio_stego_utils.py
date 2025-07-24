@@ -1,12 +1,10 @@
 import wave
 import os
-from pydub import AudioSegment
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, ID3NoHeaderError
-
 from crypto_utils import encrypt_message, decrypt_message
 
-# ---------------- WAV LSB ----------------
+# --- WAV (LSB method) ---
 
 def _text_to_bits(text):
     return ''.join(format(ord(c), '08b') for c in text)
@@ -52,7 +50,7 @@ def decode_message_from_wav(wav_file, key):
     encrypted = message.split("####END####")[0]
     return decrypt_message(encrypted, key)
 
-# ---------------- MP3 METADATA ----------------
+# --- MP3 (Metadata tag method) ---
 
 def encode_message_in_mp3(mp3_file, message, key):
     encrypted = encrypt_message(message, key)
@@ -82,4 +80,3 @@ def decode_message_from_mp3(mp3_file, key):
         return decrypt_message(encrypted, key)
     except Exception as e:
         raise ValueError("Failed to decode or no hidden message.") from e
-
