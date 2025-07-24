@@ -79,4 +79,3 @@ elif option == "Audio Steganography":
                 st.code(message)
             except Exception as e:
                 st.error(f"❌ Error: {e}")
-
