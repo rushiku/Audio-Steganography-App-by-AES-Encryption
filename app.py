@@ -1,110 +1,156 @@
 import streamlit as st
-
 import numpy as np
-import wave
-import struct
-from Crypto.Cipher import AES
-import base64
-import os
+import matplotlib.pyplot as plt
+from scipy.io import wavfile
+from pydub import AudioSegment
+import io
 
-# ================= Utility Functions =================
+# Assume your steganography functions are in this file
+from audio_stego_utils import (
+    encode_message_in_wav,
+    decode_message_from_wav,
+    encode_message_in_mp3,
+    decode_message_from_mp3
+)
 
-def pad_message(message):
-    while len(message) % 16 != 0:
-        message += " "
-    return message
+# --- Plotting Helper Function ---
+def plot_waveform(audio_file, title="Audio Waveform"):
+    """Reads an audio file (from path or buffer) and plots its waveform."""
+    try:
+        # Create a figure for the plot
+        fig, ax = plt.subplots(figsize=(10, 3))
+        
+        file_extension = ""
+        if hasattr(audio_file, 'name'): # Streamlit UploadedFile
+            file_extension = audio_file.name.split('.')[-1].lower()
+            audio_file.seek(0) # Reset buffer pointer
+        elif isinstance(audio_file, str): # File path
+            file_extension = audio_file.split('.')[-1].lower()
 
-def encrypt_message(key, message):
-    key = pad_message(key).encode("utf-8")[:16]
-    cipher = AES.new(key, AES.MODE_ECB)
-    encrypted = cipher.encrypt(pad_message(message).encode("utf-8"))
-    return base64.b64encode(encrypted).decode("utf-8")
-
-def decrypt_message(key, encrypted_message):
-    key = pad_message(key).encode("utf-8")[:16]
-    cipher = AES.new(key, AES.MODE_ECB)
-    decrypted = cipher.decrypt(base64.b64decode(encrypted_message)).decode("utf-8")
-    return decrypted.strip()
-
-def embed_message(audio_path, output_path, message):
-    song = wave.open(audio_path, mode='rb')
-    frame_bytes = bytearray(list(song.readframes(song.getnframes())))
-
-    message = message + int((len(frame_bytes) - (len(message) * 8 * 8)) / 8) *'#'
-    bits = list(map(int, ''.join([bin(ord(i)).lstrip('0b').rjust(8,'0') for i in message])))
-
-    for i, bit in enumerate(bits):
-        frame_bytes[i] = (frame_bytes[i] & 254) | bit
-    frame_modified = bytes(frame_bytes)
-
-    with wave.open(output_path, 'wb') as fd:
-        fd.setparams(song.getparams())
-        fd.writeframes(frame_modified)
-
-    song.close()
-
-def extract_message(audio_path):
-    song = wave.open(audio_path, mode='rb')
-    frame_bytes = bytearray(list(song.readframes(song.getnframes())))
-    extracted = [frame_bytes[i] & 1 for i in range(len(frame_bytes))]
-    string = "".join(chr(int("".join(map(str, extracted[i:i+8])), 2)) for i in range(0,len(extracted),8))
-    decoded = string.split("###")[0]
-    song.close()
-    return decoded
-
-def plot_waveform(audio_file):
-    song = wave.open(audio_file, 'rb')
-    signal = song.readframes(-1)
-    signal = np.frombuffer(signal, dtype=np.int16)
-    plt.figure(figsize=(10, 4))
-    plt.plot(signal)
-    plt.title("Audio Waveform (WAV only)")
-    plt.xlabel("Samples")
-    plt.ylabel("Amplitude")
-    st.pyplot(plt)
-    song.close()
-
-# ================= Streamlit App =================
-
-st.title("🔒 Audio Steganography with AES Encryption")
-
-option = st.sidebar.selectbox("Choose Action", ["Embed Message", "Extract Message"])
-
-if option == "Embed Message":
-    audio_file = st.file_uploader("Upload a WAV or MP3 file", type=["wav", "mp3"])
-    message = st.text_area("Enter the secret message")
-    key = st.text_input("Enter AES Encryption Key (16 chars max)", type="password")
-
-    if audio_file and message and key:
-        file_name = audio_file.name
-        with open(file_name, "wb") as f:
-            f.write(audio_file.getbuffer())
-
-        encrypted_message = encrypt_message(key, message)
-        output_file = "embedded_" + file_name
-
-        if file_name.endswith(".wav"):
-            embed_message(file_name, output_file, encrypted_message)
-            st.success("Message embedded successfully in WAV file!")
-            plot_waveform(output_file)  # Show waveform only for WAV
-            with open(output_file, "rb") as f:
-                st.download_button("Download Stego Audio", f, file_name=output_file)
+        if file_extension == 'wav':
+            sample_rate, data = wavfile.read(audio_file)
+            # If stereo, take only one channel
+            if data.ndim > 1:
+                data = data[:, 0]
+            duration = len(data) / sample_rate
+            time = np.linspace(0., duration, len(data))
+            ax.plot(time, data, label="Waveform")
+            
+        elif file_extension == 'mp3':
+            audio = AudioSegment.from_file(audio_file, format="mp3")
+            data = np.array(audio.get_array_of_samples())
+            sample_rate = audio.frame_rate
+            duration = len(data) / (sample_rate * audio.channels) # Adjust duration for channels
+            time = np.linspace(0., duration, len(data))
+             # If stereo, plot one channel
+            if audio.channels > 1:
+                ax.plot(time, data[::audio.channels], label="Waveform (Left Channel)")
+            else:
+                ax.plot(time, data, label="Waveform")
         else:
-            st.warning("MP3 upload detected → Encryption supported, but no graph.")
-            st.info("Currently only WAV files can display waveforms.")
+            st.warning(f"Plotting not supported for .{file_extension} format.")
+            return
 
-elif option == "Extract Message":
-    audio_file = st.file_uploader("Upload a WAV file with hidden message", type=["wav"])
-    key = st.text_input("Enter AES Decryption Key", type="password")
+        ax.set_title(title, fontsize=14)
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel("Amplitude")
+        ax.grid(True, linestyle='--', alpha=0.6)
+        st.pyplot(fig)
 
-    if audio_file and key:
-        file_name = audio_file.name
-        with open(file_name, "wb") as f:
-            f.write(audio_file.getbuffer())
+    except Exception as e:
+        st.error(f"Error plotting waveform: {e}")
 
-        extracted_message = extract_message(file_name)
-        decrypted_message = decrypt_message(key, extracted_message)
+# --- Streamlit App ---
+st.set_page_config(page_title="Audio Steganography App", layout="wide")
+st.title("🔊 Audio Steganography App with Encryption 🔐")
+st.markdown("Hide your secret messages inside WAV or MP3 audio files. This tool visualizes the audio waveforms to show how little the file is altered.")
 
-        st.success("Decrypted Secret Message:")
-        st.write(decrypted_message)
+menu = st.radio("Choose Operation", ["Encode Audio 🔏", "Decode Audio 🔓"], horizontal=True)
 
+# --- ENCODE SECTION ---
+if menu == "Encode Audio 🔏":
+    st.subheader("Hide a Message in an Audio File")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        uploaded_audio = st.file_uploader("Upload a WAV or MP3 file", type=["wav", "mp3"])
+        if uploaded_audio:
+            st.audio(uploaded_audio, format=f"audio/{uploaded_audio.type.split('/')[1]}")
+            plot_waveform(uploaded_audio, "Original Audio Waveform")
+            
+    with col2:
+        secret_text = st.text_area("Enter the secret message", height=150)
+        secret_key = st.text_input("Enter a secret key for encryption", type="password")
+
+        if st.button("Hide Message Now 🔏", use_container_width=True):
+            if uploaded_audio and secret_text and secret_key:
+                with st.spinner("Embedding message... please wait."):
+                    try:
+                        file_ext = uploaded_audio.name.split('.')[-1].lower()
+                        
+                        if file_ext == "wav":
+                            stego_path = encode_message_in_wav(uploaded_audio, secret_text, secret_key)
+                        elif file_ext == "mp3":
+                            stego_path = encode_message_in_mp3(uploaded_audio, secret_text, secret_key)
+                        else:
+                            raise ValueError("Unsupported audio format.")
+
+                        st.success("✅ Message hidden successfully!")
+                        st.subheader("Download Your Stego Audio")
+                        
+                        with open(stego_path, "rb") as f:
+                            st.download_button(
+                                "⬇️ Download Stego Audio", 
+                                f, 
+                                file_name="stego_audio." + file_ext,
+                                mime=f"audio/{'wav' if file_ext == 'wav' else 'mpeg'}",
+                                use_container_width=True
+                            )
+                        
+                        st.audio(stego_path, format=f"audio/{'wav' if file_ext == 'wav' else 'mpeg'}")
+                        plot_waveform(stego_path, "Stego (Encoded) Audio Waveform")
+
+                    except Exception as e:
+                        st.error(f"❌ Error during encoding: {e}")
+            else:
+                st.warning("Please provide all inputs: audio file, message, and key.")
+
+# --- DECODE SECTION ---
+elif menu == "Decode Audio 🔓":
+    st.subheader("Reveal a Message from an Audio File")
+    
+    col1, col2 = st.columns(2)
+
+    with col1:
+        uploaded_audio = st.file_uploader("Upload the stego audio file (WAV or MP3)", type=["wav", "mp3"])
+        if uploaded_audio:
+            st.audio(uploaded_audio, format=f"audio/{uploaded_audio.type.split('/')[1]}")
+            plot_waveform(uploaded_audio, "Uploaded Stego Audio Waveform")
+            
+    with col2:
+        secret_key = st.text_input("Enter the secret key to decode", type="password")
+        
+        if st.button("Reveal Hidden Message 🔓", use_container_width=True):
+            if uploaded_audio and secret_key:
+                with st.spinner("Decoding message..."):
+                    try:
+                        file_ext = uploaded_audio.name.split('.')[-1].lower()
+                        
+                        if file_ext == "wav":
+                            message = decode_message_from_wav(uploaded_audio, secret_key)
+                        elif file_ext == "mp3":
+                            message = decode_message_from_mp3(uploaded_audio, secret_key)
+                        else:
+                            raise ValueError("Unsupported audio format.")
+                        
+                        if message:
+                            st.success("📝 Hidden Message Found:")
+                            st.code(message, language=None)
+                        else:
+                            st.warning("No message found, or the key is incorrect.")
+
+                    except Exception as e:
+                        st.error(f"❌ Failed to decode: {e}")
+            else:
+                st.warning("Please upload a file and provide the secret key.")
