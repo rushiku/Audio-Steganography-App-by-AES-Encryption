@@ -1,6 +1,6 @@
 streamlit
-Pillow
 numpy
-pycryptodome
+matplotlib
+scipy
+pydub
 mutagen
-librosa
