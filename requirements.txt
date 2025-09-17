@@ -3,8 +3,3 @@ Pillow
 numpy
 pycryptodome
 mutagen
-pyaudioop
-pydub
-librosa
-soundfile
-matplotlib
