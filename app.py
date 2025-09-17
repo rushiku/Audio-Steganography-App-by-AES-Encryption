@@ -53,4 +53,4 @@ elif menu == "Decode Audio 🔓":
             st.success("📝 Hidden Message:")
             st.code(message)
         except Exception as e:
-            st.error(f"❌ Failed to decode: {e}") can you add a graph too a the end like some cool 
+            st.error(f"❌ Failed to decode: {e}") 
