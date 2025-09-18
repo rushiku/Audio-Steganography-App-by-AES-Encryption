@@ -6,15 +6,13 @@ from audio_stego_utils import (
     decode_message_from_mp3
 )
 
-# ----------------- Page Config -----------------
 st.set_page_config(page_title="Audio Steganography App", layout="centered")
 st.title("🔊 Audio Steganography App with Encryption 🔐")
 st.subheader("🔊 Audio Steganography")
 
-# ----------------- Menu -----------------
 menu = st.radio("Choose Operation", ["Encode Audio 🔏", "Decode Audio 🔓"])
 
-# ----------------- Encode -----------------
+# ---------------- Encode ----------------
 if menu == "Encode Audio 🔏":
     uploaded_audio = st.file_uploader("Upload a WAV or MP3 file", type=["wav", "mp3"])
     secret_text = st.text_area("Enter the secret message for audio")
@@ -46,7 +44,7 @@ if menu == "Encode Audio 🔏":
         except Exception as e:
             st.error(f"❌ Error: {e}")
 
-# ----------------- Decode -----------------
+# ---------------- Decode ----------------
 elif menu == "Decode Audio 🔓":
     uploaded_audio = st.file_uploader("Upload stego audio file (WAV or MP3)", type=["wav", "mp3"])
     secret_key = st.text_input("Enter the secret key", type="password")
@@ -65,4 +63,5 @@ elif menu == "Decode Audio 🔓":
 
         except Exception as e:
             st.error(f"❌ Failed to decode: {e}")
+
 
