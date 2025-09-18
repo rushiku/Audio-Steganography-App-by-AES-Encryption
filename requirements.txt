@@ -4,3 +4,4 @@ matplotlib
 scipy
 pydub
 mutagen
+pycryptodome
