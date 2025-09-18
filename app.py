@@ -65,3 +65,4 @@ elif menu == "Decode Audio 🔓":
 
         except Exception as e:
             st.error(f"❌ Failed to decode: {e}")
+
