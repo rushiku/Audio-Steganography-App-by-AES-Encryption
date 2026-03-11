@@ -1,6 +1,7 @@
-
 import io
 import os
+import subprocess
+import tempfile
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,26 +24,54 @@ def _to_mono(samples):
         return samples.mean(axis=1)
     return samples
 
-def _samples_from_audiosegment(audio):
-    samples = np.array(audio.get_array_of_samples())
-    if audio.channels > 1:
-        samples = samples.reshape((-1, audio.channels)).mean(axis=1)
-    return samples
+def _run_ffmpeg(input_path, output_path):
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", input_path, "-f", "wav", output_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False
+        )
+    except FileNotFoundError as e:
+        raise ValueError("FFmpeg not found. Add ffmpeg to packages.txt.") from e
+    if result.returncode != 0:
+        raise ValueError("FFmpeg failed to decode MP3 for waveform plotting.")
+
+def _mp3_bytes_to_wav_samples(file_bytes):
+    mp3_path = None
+    wav_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as mp3_tmp:
+            mp3_tmp.write(file_bytes)
+            mp3_path = mp3_tmp.name
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_tmp:
+            wav_path = wav_tmp.name
+        _run_ffmpeg(mp3_path, wav_path)
+        sample_rate, data = wavfile.read(wav_path)
+        return sample_rate, _to_mono(data)
+    finally:
+        for path in (mp3_path, wav_path):
+            if path and os.path.exists(path):
+                os.remove(path)
+
+def _mp3_path_to_wav_samples(mp3_path):
+    wav_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_tmp:
+            wav_path = wav_tmp.name
+        _run_ffmpeg(mp3_path, wav_path)
+        sample_rate, data = wavfile.read(wav_path)
+        return sample_rate, _to_mono(data)
+    finally:
+        if wav_path and os.path.exists(wav_path):
+            os.remove(wav_path)
 
 def _load_samples_from_bytes(file_bytes, file_ext):
     if file_ext == ".wav":
         sample_rate, data = wavfile.read(io.BytesIO(file_bytes))
         return sample_rate, _to_mono(data)
     if file_ext == ".mp3":
-        try:
-            from pydub import AudioSegment
-        except ModuleNotFoundError as e:
-            raise ValueError(
-                "MP3 waveform plotting requires pydub with audioop support. "
-                "Install pydub and pyaudioop, or use WAV for graphs."
-            ) from e
-        audio = AudioSegment.from_file(io.BytesIO(file_bytes), format="mp3")
-        return audio.frame_rate, _samples_from_audiosegment(audio)
+        return _mp3_bytes_to_wav_samples(file_bytes)
     raise ValueError("Unsupported audio format for plotting.")
 
 def _load_samples_from_path(path, file_ext):
@@ -50,15 +79,7 @@ def _load_samples_from_path(path, file_ext):
         sample_rate, data = wavfile.read(path)
         return sample_rate, _to_mono(data)
     if file_ext == ".mp3":
-        try:
-            from pydub import AudioSegment
-        except ModuleNotFoundError as e:
-            raise ValueError(
-                "MP3 waveform plotting requires pydub with audioop support. "
-                "Install pydub and pyaudioop, or use WAV for graphs."
-            ) from e
-        audio = AudioSegment.from_file(path, format="mp3")
-        return audio.frame_rate, _samples_from_audiosegment(audio)
+        return _mp3_path_to_wav_samples(path)
     raise ValueError("Unsupported audio format for plotting.")
 
 def _plot_waveform(samples, sample_rate, title):
@@ -171,3 +192,4 @@ elif menu == "Decode Audio 🔓":
 
         except Exception as e:
             st.error(f"❌ Failed to decode: {e}")
+
