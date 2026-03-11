@@ -1,10 +1,4 @@
-Replace this file:
 
-`/Users/rushikeshkulkarni/Desktop/Audio-Steganography-App-by-AES-Encryption-main/app.py`
-
-Full replacement contents:
-
-```python
 import io
 import os
 import streamlit as st
