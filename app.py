@@ -1,10 +1,16 @@
+Replace this file:
+
+`/Users/rushikeshkulkarni/Desktop/Audio-Steganography-App-by-AES-Encryption-main/app.py`
+
+Full replacement contents:
+
+```python
 import io
 import os
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io import wavfile
-from pydub import AudioSegment
 from audio_stego_utils import (
     encode_message_in_wav,
     decode_message_from_wav,
@@ -34,6 +40,13 @@ def _load_samples_from_bytes(file_bytes, file_ext):
         sample_rate, data = wavfile.read(io.BytesIO(file_bytes))
         return sample_rate, _to_mono(data)
     if file_ext == ".mp3":
+        try:
+            from pydub import AudioSegment
+        except ModuleNotFoundError as e:
+            raise ValueError(
+                "MP3 waveform plotting requires pydub with audioop support. "
+                "Install pydub and pyaudioop, or use WAV for graphs."
+            ) from e
         audio = AudioSegment.from_file(io.BytesIO(file_bytes), format="mp3")
         return audio.frame_rate, _samples_from_audiosegment(audio)
     raise ValueError("Unsupported audio format for plotting.")
@@ -43,6 +56,13 @@ def _load_samples_from_path(path, file_ext):
         sample_rate, data = wavfile.read(path)
         return sample_rate, _to_mono(data)
     if file_ext == ".mp3":
+        try:
+            from pydub import AudioSegment
+        except ModuleNotFoundError as e:
+            raise ValueError(
+                "MP3 waveform plotting requires pydub with audioop support. "
+                "Install pydub and pyaudioop, or use WAV for graphs."
+            ) from e
         audio = AudioSegment.from_file(path, format="mp3")
         return audio.frame_rate, _samples_from_audiosegment(audio)
     raise ValueError("Unsupported audio format for plotting.")
